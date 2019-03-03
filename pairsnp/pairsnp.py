@@ -17,8 +17,19 @@ def read_fasta(fp):
             seq.append(line)
     if name: yield (name, ''.join(seq))
 
+# same as above but takes input from a string fasta
+def internal_fasta(fa):
+    name, seq = None, []
+    for line in fa.split('\n'):
+        line = line.rstrip()
+        if line.startswith(">"):
+            if name: yield (name, ''.join(seq))
+            name, seq = line[1:], []
+        else:
+            seq.append(line)
+    if name: yield (name, ''.join(seq))
 
-def calculate_snp_matrix(fastafile):    
+def calculate_snp_matrix(fastafile, internal=False):
 
     row = np.empty(INITIALISATION_LENGTH)
     col = np.empty(INITIALISATION_LENGTH, dtype=np.int64)
@@ -29,8 +40,15 @@ def calculate_snp_matrix(fastafile):
     nseqs = 0
     seq_names = []
     current_length = INITIALISATION_LENGTH
-    with open(fastafile) as fasta:
-        for h,s in read_fasta(fasta):
+
+    # add option for internal fasta usage
+    if internal:
+        fp = open(fastafile)
+        fasta = read_fasta(fp)
+    else:
+        fasta = internal_fasta(fastafile)
+
+    for h,s in fasta:
             if nseqs==0:
                 align_length = len(s)
                 # Take consensus as first sequence
@@ -63,7 +81,7 @@ def calculate_snp_matrix(fastafile):
     if nseqs==0:
         raise ValueError('No sequences found!')
 
-    row = row[0:right] 
+    row = row[0:right]
     col = col[0:right]
     val = val[0:right]
 
@@ -97,7 +115,7 @@ def calculate_distance_matrix(sparse_matrix, consensus, type, inc_n):
             n_total = np.zeros((n_seqs, n_seqs))
             n_sum = (1*temp_sparse_n).sum(1)
             n_total[:] = n_sum
-            
+
             if(sum(consensus==110)<=0):
                 tot_cons_snps_N = cons_snps_N = 0
             else:
@@ -107,7 +125,7 @@ def calculate_distance_matrix(sparse_matrix, consensus, type, inc_n):
                 tot_cons_snps_N = np.zeros((n_seqs, n_seqs))
                 tot_cons_snps_N_sum = matrix_n_cols.sum(1)
                 tot_cons_snps_N[:] = tot_cons_snps_N_sum
-            
+
             diff_n = n_total + np.transpose(n_total) - 2*n_comp + tot_cons_snps_N + np.transpose(tot_cons_snps_N) - 2*cons_snps_N
             d = temp_total + np.transpose(temp_total) - total_differences_shared.todense() - d - diff_n
 
@@ -134,7 +152,7 @@ def main():
     args = parser.parse_args()
 
     sparse_matrix, consensus, seq_names = calculate_snp_matrix(args.filename)
- 
+
     d = calculate_distance_matrix(sparse_matrix, consensus, args.type, args.inc_n)
 
     with open(args.output, 'w') as outfile:
